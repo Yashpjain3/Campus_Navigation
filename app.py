@@ -2,7 +2,9 @@ from flask import Flask, request, jsonify, send_from_directory
 import json
 import networkx as nx
 import uuid
-from math import radians, sin, cos, sqrt, atan2
+import time
+import threading
+from math import radians, sin, cos, sqrt, atan2, degrees
 import os
 
 app = Flask(__name__)
@@ -15,19 +17,39 @@ with open("campus.json", "r") as f:
     campus_data = json.load(f)
 
 G = nx.DiGraph()
+graph_nodes = set()
 
 for start, connections in campus_data["paths"].items():
     for end, instruction in connections.items():
-        G.add_edge(start, end, instruction=instruction)
+        G.add_edge(start.strip(), end.strip(), instruction=instruction)
+        graph_nodes.add(start.strip())
+        graph_nodes.add(end.strip())
 
 # -------------------------
 # Active User Sessions
 # -------------------------
 
 active_users = {}
+session_lock = threading.Lock()
+
+# Auto-cleanup sessions older than 2 hours
+def cleanup_sessions():
+    while True:
+        time.sleep(600)  # every 10 minutes
+        now = time.time()
+        with session_lock:
+            to_delete = [
+                sid for sid, s in active_users.items()
+                if now - s.get("last_active", now) > 7200
+            ]
+            for sid in to_delete:
+                del active_users[sid]
+
+cleanup_thread = threading.Thread(target=cleanup_sessions, daemon=True)
+cleanup_thread.start()
 
 # -------------------------
-# Distance Calculation
+# Distance Calculation (Haversine)
 # -------------------------
 
 def calculate_distance(lat1, lon1, lat2, lon2):
@@ -35,23 +57,119 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
 
 # -------------------------
-# Get All Locations (for dropdown)
+# Bearing Calculation
+# -------------------------
+
+def calculate_bearing(lat1, lon1, lat2, lon2):
+    """Returns compass bearing (0-360) from point1 to point2."""
+    lat1, lat2 = radians(lat1), radians(lat2)
+    dlon = radians(lon2 - lon1)
+    x = sin(dlon) * cos(lat2)
+    y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon)
+    bearing = degrees(atan2(x, y))
+    return (bearing + 360) % 360
+
+# -------------------------
+# Dynamic Direction
+# -------------------------
+
+def get_relative_direction(user_heading, target_bearing):
+    """
+    Given user's current heading and the bearing to the target,
+    return a human-readable relative direction.
+    """
+    diff = (target_bearing - user_heading + 360) % 360
+
+    if diff < 25 or diff > 335:
+        return "straight"
+    elif 25 <= diff < 80:
+        return "slight right"
+    elif 80 <= diff < 135:
+        return "right"
+    elif 135 <= diff <= 180:
+        return "sharp right"
+    elif 180 < diff <= 225:
+        return "sharp left"
+    elif 225 < diff < 280:
+        return "left"
+    elif 280 <= diff <= 335:
+        return "slight left"
+    return "straight"
+
+def build_dynamic_instruction(user_heading, target_bearing, next_name, distance_m):
+    """Build a direction instruction relative to user's current heading."""
+    direction = get_relative_direction(user_heading, target_bearing)
+
+    dist_str = str(int(round(distance_m))) + " meters"
+
+    if direction == "straight":
+        return f"Continue straight for {dist_str} to reach {next_name}."
+    elif direction == "slight right":
+        return f"In {dist_str}, bear slightly right towards {next_name}."
+    elif direction == "right":
+        return f"In {dist_str}, turn right towards {next_name}."
+    elif direction == "sharp right":
+        return f"In {dist_str}, take a sharp right towards {next_name}."
+    elif direction == "slight left":
+        return f"In {dist_str}, bear slightly left towards {next_name}."
+    elif direction == "left":
+        return f"In {dist_str}, turn left towards {next_name}."
+    elif direction == "sharp left":
+        return f"In {dist_str}, take a sharp left towards {next_name}."
+    else:
+        return f"Turn around and walk {dist_str} to reach {next_name}."
+
+# -------------------------
+# Get All Navigable Locations
 # -------------------------
 
 @app.route("/locations", methods=["GET"])
 def get_locations():
     locs = []
     for loc_id, data in campus_data["locations"].items():
-        locs.append({
-            "id":   loc_id.strip(),
-            "name": data["name"]
-        })
+        clean_id = loc_id.strip()
+        if clean_id not in graph_nodes:
+            continue
+        locs.append({"id": clean_id, "name": data["name"].strip()})
     locs.sort(key=lambda x: x["name"])
     return jsonify(locs)
+
+# -------------------------
+# Find Nearest Location to GPS
+# -------------------------
+
+@app.route("/nearest_location", methods=["POST"])
+def nearest_location():
+    data = request.json
+    lat  = data["lat"]
+    lng  = data["lng"]
+
+    min_dist = float("inf")
+    nearest_id   = None
+    nearest_name = None
+
+    for loc_id, loc_data in campus_data["locations"].items():
+        clean_id = loc_id.strip()
+        if clean_id not in graph_nodes:
+            continue
+        if "lat" not in loc_data or "lng" not in loc_data:
+            continue
+        dist = calculate_distance(lat, lng, loc_data["lat"], loc_data["lng"])
+        if dist < min_dist:
+            min_dist    = dist
+            nearest_id   = clean_id
+            nearest_name = loc_data["name"].strip()
+
+    if nearest_id:
+        return jsonify({
+            "location_id": nearest_id,
+            "name":        nearest_name,
+            "distance_m":  round(min_dist, 1)
+        })
+    return jsonify({"error": "Could not determine your campus location."})
 
 # -------------------------
 # Start Navigation
@@ -67,19 +185,18 @@ def start_navigation():
         path = list(nx.shortest_path(G, start, dest))
     except nx.NetworkXNoPath:
         return jsonify({"error": "No path found between these locations."})
-    except nx.NodeNotFound:
-        return jsonify({"error": "Invalid location ID."})
+    except nx.NodeNotFound as e:
+        return jsonify({"error": f"Location not found in map: {str(e)}"})
 
     session_id = str(uuid.uuid4())
-    active_users[session_id] = {
-        "route": path,
-        "step":  0
-    }
+    with session_lock:
+        active_users[session_id] = {
+            "route":       path,
+            "step":        0,
+            "last_active": time.time()
+        }
 
-    return jsonify({
-        "session_id": session_id,
-        "route":      path
-    })
+    return jsonify({"session_id": session_id, "route": path, "total_steps": len(path) - 1})
 
 # -------------------------
 # Update GPS Location
@@ -91,13 +208,17 @@ def update_location():
     session_id = data["session_id"]
     lat        = data["lat"]
     lng        = data["lng"]
+    # user_heading: bearing of movement, sent from client (-1 if unknown)
+    user_heading = data.get("heading", -1)
 
-    user = active_users.get(session_id)
-    if not user:
-        return jsonify({"error": "Invalid or expired session."})
+    with session_lock:
+        user = active_users.get(session_id)
+        if not user:
+            return jsonify({"error": "Invalid or expired session."})
 
-    route = user["route"]
-    step  = user["step"]
+        route = user["route"]
+        step  = user["step"]
+        user["last_active"] = time.time()
 
     if step >= len(route) - 1:
         return jsonify({"instruction": "Navigation complete.", "step": step})
@@ -108,17 +229,30 @@ def update_location():
     target     = campus_data["locations"][next_node]
     target_lat = target["lat"]
     target_lng = target["lng"]
+    next_name  = target["name"].strip()
 
-    distance    = calculate_distance(lat, lng, target_lat, target_lng)
-    instruction = G[current][next_node]["instruction"]
+    distance        = calculate_distance(lat, lng, target_lat, target_lng)
+    target_bearing  = calculate_bearing(lat, lng, target_lat, target_lng)
 
+    # Build dynamic instruction if heading is known, else use static
+    if user_heading >= 0:
+        instruction = build_dynamic_instruction(user_heading, target_bearing, next_name, distance)
+    else:
+        instruction = G[current][next_node]["instruction"]
+
+    # Advance step when close enough
     if distance < 5:
-        user["step"] += 1
+        with session_lock:
+            if session_id in active_users:
+                active_users[session_id]["step"] += 1
+        step += 1
 
     return jsonify({
-        "instruction": instruction,
-        "distance":    round(distance, 1),
-        "step":        step
+        "instruction":     instruction,
+        "distance":        round(distance, 1),
+        "step":            step,
+        "target_bearing":  round(target_bearing, 1),
+        "next_location":   next_name
     })
 
 # -------------------------
