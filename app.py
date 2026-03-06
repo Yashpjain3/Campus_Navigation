@@ -125,17 +125,19 @@ def update_location():
 # Serve Web App
 # -------------------------
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 @app.route("/")
 def home():
-    return send_from_directory("../web", "index.html")
+    return send_from_directory(BASE_DIR, "index.html")
 
 @app.route("/script.js")
 def script():
-    return send_from_directory("../web", "script.js")
+    return send_from_directory(BASE_DIR, "script.js")
 
 @app.route("/style.css")
 def style():
-    return send_from_directory("../web", "style.css")
+    return send_from_directory(BASE_DIR, "style.css")
 
 # -------------------------
 
