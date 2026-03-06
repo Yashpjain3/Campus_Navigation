@@ -210,6 +210,10 @@
       "loc_024": "Walk 27 meters left to reach the Dean Office Circle.",
       "loc_002": "Walk 114 meters right to reach the Chemistry Department."
     },
+     "loc_004": {
+      "loc_021": "Walk 30 meters towards your left and take left and walk straight for 21 meters to reach the CS Lawn Circle.",
+      "loc_003": "Turn to you right and Walk straight for 60 meters and take the next right and walk straight for 10 meters to reach the Environment department Department."
+    },
     "loc_002": {
       "loc_001": "Walk 114 meters back to reach the Admin Block.",
       "loc_003": "Walk 69 meters straight and a slight left to reach the Environment Department.",
@@ -240,6 +244,9 @@
     "loc_012": {
       "loc_024": "Walk 134 meters back towards the entry gate to reach the Dean Office Circle.",
       "loc_011": "Walk 30 meters towards your right to reach the Electrical Department, the Destination will be to your left."
+    },
+    "loc_014": {
+      "loc_024": "Walk 93 meters back towards the entry gate to reach the Dean Office Circle."
     },
     "loc_011": {
       "loc_012": "Walk 30 meters towards your left to reach the Ganesha Temple, the Destination will be to your right.",
@@ -288,4 +295,5 @@
       "loc_024": "Walk 71 meters back to reach the Dean Circle."
     }
   }
+
 }
