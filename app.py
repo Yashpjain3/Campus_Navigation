@@ -241,16 +241,24 @@ def update_location():
         instruction = G[current][next_node]["instruction"]
 
     # Advance step when close enough
-    if distance < 5:
+    # 15m threshold — GPS on phones has ±5-10m natural drift, 5m was too aggressive
+    arrived = distance < 15
+    if arrived:
         with session_lock:
             if session_id in active_users:
-                active_users[session_id]["step"] += 1
-        step += 1
+                user_now = active_users[session_id]
+                last_step_time = user_now.get("last_step_time", 0)
+                # Enforce minimum 8 seconds between step advances to prevent GPS drift skipping steps
+                if time.time() - last_step_time > 8:
+                    user_now["step"] += 1
+                    user_now["last_step_time"] = time.time()
+                    step += 1
 
     return jsonify({
         "instruction":     instruction,
         "distance":        round(distance, 1),
         "step":            step,
+        "arrived":         arrived,
         "target_bearing":  round(target_bearing, 1),
         "next_location":   next_name
     })
