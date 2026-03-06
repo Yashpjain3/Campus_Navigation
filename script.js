@@ -1,48 +1,44 @@
 /* ============================================================
    Campus Navigator — script.js
-   Voice assistant + dropdown fallback for visually impaired
+   Fixes: sanitized IDs, auto-start after voice & dropdowns
    ============================================================ */
 
-let session_id  = null;
-let watchId     = null;
-let totalSteps  = 0;
-let currentStep = 0;
-let destName    = "";
-let allLocations = [];   // [{id, name}] loaded from server
+let session_id   = null;
+let watchId      = null;
+let totalSteps   = 0;
+let currentStep  = 0;
+let destName     = "";
+let allLocations = [];
+let voiceSetupDone = false;   // tracks if BOTH locations were set by voice
 
 /* ------------------------------------------------------------------ */
-/*  SPEAK  (text-to-speech)                                           */
+/*  SPEAK                                                              */
 /* ------------------------------------------------------------------ */
 
 function speak(text, onEnd) {
-  if (!window.speechSynthesis) {
-    if (onEnd) onEnd();
-    return;
-  }
+  if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
   window.speechSynthesis.cancel();
-  const utt  = new SpeechSynthesisUtterance(text);
-  utt.lang   = "en-IN";
-  utt.rate   = 0.92;
-  utt.pitch  = 1.0;
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang  = "en-IN";
+  utt.rate  = 0.92;
+  utt.pitch = 1.0;
   if (onEnd) utt.onend = onEnd;
   window.speechSynthesis.speak(utt);
 }
 
 /* ------------------------------------------------------------------ */
-/*  LISTEN  (speech-to-text, returns Promise<string>)                 */
+/*  LISTEN                                                             */
 /* ------------------------------------------------------------------ */
 
 function listen() {
   return new Promise((resolve, reject) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { reject("not_supported"); return; }
-
     setVoiceStatus("listening");
-    const rec          = new SR();
-    rec.lang           = "en-IN";
-    rec.interimResults = false;
+    const rec = new SR();
+    rec.lang            = "en-IN";
+    rec.interimResults  = false;
     rec.maxAlternatives = 3;
-
     rec.onresult = (e) => {
       const results = Array.from(e.results[0]).map(r => r.transcript.trim().toLowerCase());
       setVoiceStatus("idle");
@@ -55,47 +51,48 @@ function listen() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  MATCH SPOKEN TEXT TO LOCATION                                     */
+/*  MATCH SPOKEN TEXT TO LOCATION                                      */
 /* ------------------------------------------------------------------ */
 
 function matchLocation(transcripts) {
-  // transcripts = array of alternatives from speech recognition
   for (const transcript of transcripts) {
     const cleaned = transcript.toLowerCase().replace(/[^a-z0-9 ]/g, "");
     let best = null, bestScore = 0;
-
     for (const loc of allLocations) {
-      const locName = loc.name.toLowerCase().replace(/[^a-z0-9 ]/g, "");
-      // Word overlap scoring
-      const locWords     = locName.split(" ");
-      const spokenWords  = cleaned.split(" ");
-      const overlap      = locWords.filter(w => spokenWords.some(s => s.includes(w) || w.includes(s))).length;
-      const score        = overlap / locWords.length;
-
-      // Also check if the full name is contained
-      const contains     = cleaned.includes(locName) || locName.includes(cleaned);
-
-      const finalScore   = contains ? 1 : score;
+      const locName    = loc.name.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+      const locWords   = locName.split(" ");
+      const spokenWords = cleaned.split(" ");
+      const overlap    = locWords.filter(w => spokenWords.some(s => s.includes(w) || w.includes(s))).length;
+      const score      = overlap / locWords.length;
+      const contains   = cleaned.includes(locName) || locName.includes(cleaned);
+      const finalScore = contains ? 1 : score;
       if (finalScore > bestScore) { bestScore = finalScore; best = loc; }
     }
-
     if (bestScore >= 0.4) return best;
   }
   return null;
 }
 
 /* ------------------------------------------------------------------ */
-/*  VOICE FLOW — Ask current location then destination                */
+/*  VOICE FLOW                                                         */
 /* ------------------------------------------------------------------ */
 
 async function runVoiceSetup() {
   setVoiceFlowVisible(true);
+  voiceSetupDone = false;
 
-  // Step 1: Ask for current location
-  await askVoiceLocation("start");
+  const startMatched = await askVoiceLocation("start");
+  const destMatched  = await askVoiceLocation("dest");
 
-  // Step 2: Ask for destination
-  await askVoiceLocation("dest");
+  // Both matched via voice → auto-start immediately
+  if (startMatched && destMatched) {
+    voiceSetupDone = true;
+    setVoicePrompt("✅ Both locations set. Starting navigation...");
+    speak("Starting navigation now.", async () => {
+      await delay(500);
+      startNavigation();
+    });
+  }
 }
 
 async function askVoiceLocation(which) {
@@ -103,41 +100,41 @@ async function askVoiceLocation(which) {
   const question = isStart
     ? "Where are you currently? Please say your current location."
     : "Where do you want to go? Please say your destination.";
-  const label    = isStart ? "current location" : "destination";
+  const label = isStart ? "current location" : "destination";
 
-  let matched = null;
+  let matched  = null;
   let attempts = 0;
 
   while (!matched && attempts < 3) {
     attempts++;
     setVoicePrompt(question);
-    speak(question, async () => {
-      // tiny delay after speech ends before listening
-    });
-
-    // Wait for speech to finish before listening
-    await delay(isStart ? 3000 : 3000);
+    speak(question);
+    await delay(3200);   // wait for speech to finish
 
     try {
       const transcripts = await listen();
-      setVoicePrompt("I heard: \"" + transcripts[0] + "\" — matching...");
+      setVoicePrompt('I heard: "' + transcripts[0] + '" — matching...');
       matched = matchLocation(transcripts);
 
       if (matched) {
-        // Set dropdown
+        // Set the dropdown value using the sanitized ID
         const selId = isStart ? "start-select" : "dest-select";
-        document.getElementById(selId).value = matched.id;
-        document.getElementById(selId).dispatchEvent(new Event("change"));
+        const sel   = document.getElementById(selId);
+        sel.value   = matched.id;
+
+        // Highlight the dropdown
+        sel.classList.add("voice-set");
 
         const confirm = "Got it. " + (isStart ? "Your current location is " : "Your destination is ") + matched.name + ".";
         setVoicePrompt("✅ " + (isStart ? "Start" : "Destination") + ": " + matched.name);
         speak(confirm);
-        await delay(2500);
+        checkStartReady();
+        await delay(2800);
 
       } else {
         const retry = attempts < 3
-          ? "Sorry, I couldn't find that location. Please try again and say the " + label + " clearly."
-          : "Sorry, I couldn't understand. Please select the " + label + " from the dropdown.";
+          ? "Sorry, I could not find that location. Please try again and say the " + label + " clearly."
+          : "Sorry, I could not understand. Please select the " + label + " from the dropdown below.";
         setVoicePrompt("❓ Couldn't match. " + (attempts < 3 ? "Retrying..." : "Use dropdown."));
         speak(retry);
         await delay(3000);
@@ -146,15 +143,33 @@ async function askVoiceLocation(which) {
       if (err === "not_supported") {
         setVoicePrompt("Voice input not supported. Please use the dropdowns.");
         speak("Voice input is not supported on this browser. Please use the dropdown menus.");
-        break;
+        return null;
       }
       setVoicePrompt("Microphone error. Please use the dropdown.");
-      break;
+      return null;
     }
   }
 
-  // After voice flow, check if both are set to enable button
   checkStartReady();
+  return matched;
+}
+
+/* ------------------------------------------------------------------ */
+/*  AUTO-START LOGIC                                                   */
+/* ------------------------------------------------------------------ */
+
+function maybeAutoStart(fromVoice) {
+  const s = document.getElementById("start-select").value;
+  const d = document.getElementById("dest-select").value;
+  if (!s || !d || s === d) return;
+
+  if (fromVoice) {
+    // Voice already handles its own auto-start in runVoiceSetup
+    return;
+  }
+
+  // Both dropdowns manually selected → auto-start
+  startNavigation();
 }
 
 /* ------------------------------------------------------------------ */
@@ -185,26 +200,31 @@ function setVoiceFlowVisible(show) {
 }
 
 function setGpsStatus(state, msg) {
-  const dot  = document.getElementById("gps-dot");
-  const text = document.getElementById("gps-text");
-  dot.className  = "gps-dot " + state;
-  text.innerText = msg;
+  document.getElementById("gps-dot").className = "gps-dot " + state;
+  document.getElementById("gps-text").innerText = msg;
 }
 
 function checkStartReady() {
   const s = document.getElementById("start-select").value;
   const d = document.getElementById("dest-select").value;
-  document.getElementById("start-btn").disabled = !(s && d && s !== d);
+  const ok = s && d && s !== d;
+  document.getElementById("start-btn").disabled = !ok;
 }
 
 /* ------------------------------------------------------------------ */
-/*  LOAD LOCATIONS FROM SERVER                                         */
+/*  LOAD LOCATIONS — sanitize IDs to prevent invalid location errors  */
 /* ------------------------------------------------------------------ */
 
 async function loadLocations() {
   try {
-    const res  = await fetch("/locations");
-    allLocations = await res.json();   // [{id, name}]
+    const res = await fetch("/locations");
+    const raw = await res.json();
+
+    // Strip any stray whitespace or \r characters from IDs and names
+    allLocations = raw.map(loc => ({
+      id:   loc.id.trim().replace(/\r/g, ""),
+      name: loc.name.trim().replace(/\r/g, "")
+    }));
 
     const startSel = document.getElementById("start-select");
     const destSel  = document.getElementById("dest-select");
@@ -214,7 +234,18 @@ async function loadLocations() {
       destSel.appendChild(new Option(loc.name, loc.id));
     });
 
-    [startSel, destSel].forEach(sel => sel.addEventListener("change", checkStartReady));
+    // Dropdown manual change
+    [startSel, destSel].forEach(sel => {
+      sel.addEventListener("change", () => {
+        checkStartReady();
+        // Auto-start only when BOTH are chosen manually
+        const s = startSel.value;
+        const d = destSel.value;
+        if (s && d && s !== d) {
+          startNavigation();
+        }
+      });
+    });
 
   } catch (e) {
     setGpsStatus("error", "Could not load campus data.");
@@ -226,22 +257,14 @@ async function loadLocations() {
 /* ------------------------------------------------------------------ */
 
 window.onload = async function () {
-
   if (!navigator.geolocation) {
     setGpsStatus("error", "Geolocation not supported on this device.");
     return;
   }
-
   setGpsStatus("waiting", "Waiting for GPS...");
   await loadLocations();
-
-  // Greet and start voice flow automatically
-  await delay(800);
-  speak(
-    "Welcome to Campus Navigator. I will help you navigate the campus. " +
-    "Press the microphone button or use the dropdowns to set your locations.",
-    null
-  );
+  await delay(600);
+  speak("Welcome to Campus Navigator. Press the microphone button to use voice, or select your locations from the dropdowns.");
 };
 
 /* ------------------------------------------------------------------ */
@@ -249,11 +272,11 @@ window.onload = async function () {
 /* ------------------------------------------------------------------ */
 
 async function startNavigation() {
-  const start  = document.getElementById("start-select").value;
-  const dest   = document.getElementById("dest-select").value;
-  destName     = document.getElementById("dest-select").selectedOptions[0].text;
+  const start = document.getElementById("start-select").value.trim();
+  const dest  = document.getElementById("dest-select").value.trim();
+  destName    = document.getElementById("dest-select").selectedOptions[0].text.trim();
 
-  if (!start || !dest) return;
+  if (!start || !dest || start === dest) return;
 
   document.getElementById("start-btn").disabled = true;
   setGpsStatus("waiting", "Starting navigation...");
@@ -319,26 +342,20 @@ async function sendLocation(position) {
     const data = await res.json();
 
     if (data.error) { setGpsStatus("error", "Session error."); return; }
-
     if (data.instruction === "Navigation complete.") { showArrived(); return; }
 
     const instruction = data.instruction;
     const distance    = Math.round(data.distance);
     const step        = data.step ?? currentStep;
 
-    // Speak only when instruction changes
     if (instruction !== lastInstruction) {
       speak(instruction);
       lastInstruction = instruction;
     }
 
-    // Approaching notification
     if (distance <= 15 && distance > 5) {
-      const approaching = "Approaching next point in " + distance + " meters.";
-      if (lastInstruction !== approaching) {
-        speak(approaching);
-        lastInstruction = approaching;
-      }
+      const msg = "Approaching in " + distance + " meters.";
+      if (lastInstruction !== msg) { speak(msg); lastInstruction = msg; }
     }
 
     document.getElementById("instruction-text").innerText = instruction;
@@ -385,11 +402,16 @@ function stopNavigation() {
   if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   session_id      = null;
   lastInstruction = "";
+  voiceSetupDone  = false;
   document.getElementById("nav-card").style.display        = "none";
   document.getElementById("setup-card").style.display      = "block";
   document.getElementById("arrived-box").style.display     = "none";
   document.getElementById("instruction-box").style.display = "block";
   document.getElementById("start-btn").disabled            = true;
+  document.getElementById("start-select").value            = "";
+  document.getElementById("dest-select").value             = "";
+  document.getElementById("start-select").classList.remove("voice-set");
+  document.getElementById("dest-select").classList.remove("voice-set");
   setVoiceFlowVisible(false);
   setGpsStatus("waiting", "Navigation stopped.");
   speak("Navigation stopped.");
