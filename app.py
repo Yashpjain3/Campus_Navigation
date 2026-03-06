@@ -47,7 +47,7 @@ def get_locations():
     locs = []
     for loc_id, data in campus_data["locations"].items():
         locs.append({
-            "id":   loc_id,
+            "id":   loc_id.strip(),
             "name": data["name"]
         })
     locs.sort(key=lambda x: x["name"])
@@ -60,8 +60,8 @@ def get_locations():
 @app.route("/start_navigation", methods=["POST"])
 def start_navigation():
     data  = request.json
-    start = data["start"]
-    dest  = data["destination"]
+    start = data["start"].strip()
+    dest  = data["destination"].strip()
 
     try:
         path = list(nx.shortest_path(G, start, dest))
