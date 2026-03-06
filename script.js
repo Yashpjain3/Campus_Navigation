@@ -92,66 +92,11 @@ function computeHeading(lat1, lng1, lat2, lng2) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  USE CURRENT GPS LOCATION                                          */
+/*  USE CURRENT GPS LOCATION  (button onclick handler)               */
 /* ------------------------------------------------------------------ */
 
 function useCurrentLocation() {
-  const btn = document.getElementById("gps-locate-btn");
-  btn.disabled  = true;
-  btn.innerText = "📡 Locating...";
-  setGpsStatus("waiting", "Getting your current position...");
-  speak("Getting your current location.");
-
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-
-      try {
-        const res  = await fetch("/nearest_location", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ lat, lng })
-        });
-        const data = await res.json();
-
-        if (data.error) {
-          setGpsStatus("error", data.error);
-          speak(data.error);
-          btn.disabled  = false;
-          btn.innerText = "📍 Use My Current Location";
-          return;
-        }
-
-        // Set start dropdown
-        const startSel = document.getElementById("start-select");
-        startSel.value = data.location_id;
-        startSel.classList.add("voice-set");
-
-        const msg = "Your current location is " + data.name +
-                    ", which is " + Math.round(data.distance_m) + " meters away.";
-        setVoicePrompt("📍 " + data.name + " (" + Math.round(data.distance_m) + "m away)");
-        setGpsStatus("active", "Location found: " + data.name);
-        speak(msg);
-        checkStartReady();
-
-        btn.disabled  = false;
-        btn.innerText = "✅ " + data.name;
-
-      } catch (e) {
-        setGpsStatus("error", "Could not reach server.");
-        btn.disabled  = false;
-        btn.innerText = "📍 Use My Current Location";
-      }
-    },
-    (err) => {
-      setGpsStatus("error", "GPS permission denied. Please allow location access.");
-      speak("Could not get your location. Please allow GPS permission.");
-      btn.disabled  = false;
-      btn.innerText = "📍 Use My Current Location";
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
+  useCurrentLocationAsync();
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,11 +118,64 @@ async function runVoiceSetup() {
 }
 
 async function askVoiceLocation(which) {
-  const isStart  = which === "start";
+  const isStart = which === "start";
+  const label   = isStart ? "current location" : "destination";
+
+  // ── For start location: first ask GPS vs manual ──────────────────
+  if (isStart) {
+    const gpsQuestion = "Select your starting point. Shall I use your current location? Say yes to use GPS, or say the name of your starting location.";
+    setVoicePrompt(gpsQuestion);
+    speak(gpsQuestion);
+    await delay(3800);
+
+    try {
+      const transcripts = await listen();
+      setVoicePrompt('Heard: "' + transcripts[0] + '"');
+
+      const isYes = transcripts.some(t =>
+        t.includes("yes") || t.includes("yeah") || t.includes("sure") ||
+        t.includes("ok") || t.includes("current") || t.includes("my location") ||
+        t.includes("here") || t.includes("use gps") || t.includes("use my")
+      );
+
+      if (isYes) {
+        setVoicePrompt("📡 Using your GPS location...");
+        speak("Sure, using your current GPS location.");
+        await useCurrentLocationAsync();   // await GPS result
+        checkStartReady();
+        return { fromGPS: true };
+      }
+
+      // They said a location name directly — try to match
+      const direct = matchLocation(transcripts);
+      if (direct) {
+        document.getElementById("start-select").value = direct.id;
+        document.getElementById("start-select").classList.add("voice-set");
+        setVoicePrompt("✅ Start: " + direct.name);
+        speak("Got it. Your starting location is " + direct.name + ".");
+        checkStartReady();
+        await delay(2600);
+        return direct;
+      }
+
+      // Couldn't match — fall through to retry loop below
+      setVoicePrompt("❓ Could not match. Let me ask again...");
+      speak("Sorry, I could not find that location. Let me ask again.");
+      await delay(2500);
+
+    } catch (err) {
+      if (err === "not_supported") {
+        setVoicePrompt("Voice not supported. Please use dropdowns.");
+        speak("Voice input is not supported. Please use the dropdown menus.");
+        return null;
+      }
+    }
+  }
+
+  // ── General retry loop (for destination, or if start failed above) ─
   const question = isStart
-    ? "Where are you currently? Say your current location, or say use my location to use GPS."
+    ? "Please say your starting location clearly."
     : "Where do you want to go? Please say your destination.";
-  const label = isStart ? "current location" : "destination";
 
   let matched  = null;
   let attempts = 0;
@@ -186,37 +184,27 @@ async function askVoiceLocation(which) {
     attempts++;
     setVoicePrompt(question);
     speak(question);
-    await delay(3400);
+    await delay(3200);
 
     try {
       const transcripts = await listen();
       setVoicePrompt('Heard: "' + transcripts[0] + '" — matching...');
-
-      // Handle "use my location" voice command for start
-      if (isStart && transcripts.some(t => t.includes("my location") || t.includes("current location") || t.includes("here"))) {
-        setVoicePrompt("Using GPS to find your location...");
-        speak("Getting your GPS location.");
-        useCurrentLocation();
-        return { fromGPS: true };
-      }
-
       matched = matchLocation(transcripts);
 
       if (matched) {
         const selId = isStart ? "start-select" : "dest-select";
         document.getElementById(selId).value = matched.id;
         document.getElementById(selId).classList.add("voice-set");
-
         setVoicePrompt("✅ " + (isStart ? "Start" : "Destination") + ": " + matched.name);
-        speak("Got it. " + (isStart ? "Current location is " : "Destination is ") + matched.name + ".");
+        speak("Got it. " + (isStart ? "Starting location is " : "Destination is ") + matched.name + ".");
         checkStartReady();
-        await delay(2800);
+        await delay(2600);
 
       } else {
         const retry = attempts < 3
           ? "Sorry, I could not find that. Please try again."
-          : "Please select from the dropdown below.";
-        setVoicePrompt("❓ Could not match. " + (attempts < 3 ? "Try again..." : "Use dropdown."));
+          : "I could not understand. Please select from the dropdown below.";
+        setVoicePrompt("❓ Could not match. " + (attempts < 3 ? "Retrying..." : "Use dropdown."));
         speak(retry);
         await delay(3000);
       }
@@ -233,6 +221,65 @@ async function askVoiceLocation(which) {
 
   checkStartReady();
   return matched;
+}
+
+/* ------------------------------------------------------------------ */
+/*  GPS LOCATE — async version (returns Promise)                      */
+/* ------------------------------------------------------------------ */
+
+function useCurrentLocationAsync() {
+  return new Promise((resolve) => {
+    const btn = document.getElementById("gps-locate-btn");
+    btn.disabled  = true;
+    btn.innerText = "📡 Locating...";
+    setGpsStatus("waiting", "Getting your current position...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res  = await fetch("/nearest_location", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+          });
+          const data = await res.json();
+
+          if (data.error) {
+            setGpsStatus("error", data.error);
+            speak(data.error);
+            btn.disabled  = false;
+            btn.innerText = "📍 Use My Current Location";
+            resolve(null);
+            return;
+          }
+
+          document.getElementById("start-select").value = data.location_id;
+          document.getElementById("start-select").classList.add("voice-set");
+          setVoicePrompt("📍 " + data.name + " (" + Math.round(data.distance_m) + "m away)");
+          setGpsStatus("active", "Location found: " + data.name);
+          speak("Your current location is " + data.name + ".");
+          btn.disabled  = false;
+          btn.innerText = "✅ " + data.name;
+          checkStartReady();
+          resolve(data);
+
+        } catch (e) {
+          setGpsStatus("error", "Could not reach server.");
+          btn.disabled  = false;
+          btn.innerText = "📍 Use My Current Location";
+          resolve(null);
+        }
+      },
+      () => {
+        setGpsStatus("error", "GPS permission denied.");
+        speak("Could not get your location. Please allow GPS permission.");
+        btn.disabled  = false;
+        btn.innerText = "📍 Use My Current Location";
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
 }
 
 /* ------------------------------------------------------------------ */
