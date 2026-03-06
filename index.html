@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Campus Navigator</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet"/>
@@ -27,78 +27,116 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      display: flex; flex-direction: column; align-items: center;
       padding-bottom: 60px;
       overflow-x: hidden;
     }
 
+    /* HEADER */
     header {
       width: 100%;
       background: linear-gradient(135deg, #0d1b2a, #0b1622);
       border-bottom: 1px solid var(--border);
       padding: 22px 24px 20px;
-      text-align: center;
-      position: relative;
+      text-align: center; position: relative;
     }
     header::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 50%;
-      transform: translateX(-50%);
-      width: 60px; height: 2px;
-      background: linear-gradient(90deg, var(--accent), var(--accent2));
-      border-radius: 2px;
+      content: ''; position: absolute; bottom: 0; left: 50%;
+      transform: translateX(-50%); width: 60px; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px;
     }
-    .logo-row {
-      display: flex; align-items: center; justify-content: center; gap: 12px;
-      margin-bottom: 4px;
-    }
+    .logo-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 4px; }
     .logo-icon {
       width: 38px; height: 38px;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px;
+      border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px;
     }
     h1 { font-family: 'Space Mono', monospace; font-size: 20px; letter-spacing: 2px; }
     .subtitle { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
 
+    /* GPS BAR */
     #gps-bar {
-      margin: 20px 16px 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px 16px;
+      margin: 20px 16px 0; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 16px;
       display: flex; align-items: center; gap: 10px;
       width: calc(100% - 32px); max-width: 480px;
     }
-    .gps-dot {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: var(--muted); flex-shrink: 0; transition: background 0.4s;
-    }
+    .gps-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.4s; }
     .gps-dot.active  { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1.5s infinite; }
     .gps-dot.error   { background: var(--danger); }
     .gps-dot.waiting { background: var(--warn); animation: pulse 1s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
-
     #gps-text { font-size: 13px; color: var(--muted); flex: 1; }
 
+    /* CARD */
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      margin: 16px;
-      width: calc(100% - 32px); max-width: 480px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+      margin: 16px; width: calc(100% - 32px); max-width: 480px;
     }
-    .card-label {
-      font-size: 11px; font-family: 'Space Mono', monospace;
-      color: var(--accent); letter-spacing: 2px; text-transform: uppercase;
+    .card-label { font-size: 11px; font-family: 'Space Mono', monospace; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 18px; }
+
+    /* VOICE ASSISTANT PANEL */
+    #voice-flow {
+      display: none;
+      background: linear-gradient(135deg, rgba(0,212,255,0.07), rgba(0,255,157,0.05));
+      border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 14px;
+      padding: 20px;
       margin-bottom: 18px;
+      text-align: center;
+    }
+    #voice-flow .va-title {
+      font-size: 12px; font-family: 'Space Mono', monospace;
+      color: var(--accent); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px;
+    }
+    #voice-prompt {
+      font-size: 15px; color: var(--text); line-height: 1.5;
+      min-height: 44px; margin-bottom: 16px;
+    }
+    #voice-input-btn {
+      width: 72px; height: 72px; border-radius: 50%; border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      cursor: pointer; font-size: 30px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto;
+      box-shadow: 0 4px 20px rgba(0,212,255,0.3);
+      transition: transform 0.15s, box-shadow 0.2s;
+    }
+    #voice-input-btn:active { transform: scale(0.93); }
+    #voice-input-btn.listening {
+      background: linear-gradient(135deg, var(--danger), #ff8c6b);
+      box-shadow: 0 0 0 8px rgba(255,77,109,0.2), 0 4px 20px rgba(255,77,109,0.4);
+      animation: mic-pulse 0.8s infinite;
+    }
+    @keyframes mic-pulse { 0%,100%{box-shadow:0 0 0 6px rgba(255,77,109,0.2)} 50%{box-shadow:0 0 0 14px rgba(255,77,109,0.08)} }
+
+    .va-hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
+
+    /* MIC BUTTON ROW (always visible) */
+    .mic-row {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .mic-row:hover { border-color: var(--accent); }
+    .mic-row-icon { font-size: 26px; }
+    .mic-row-text { flex: 1; }
+    .mic-row-text strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 2px; }
+    .mic-row-text span { font-size: 12px; color: var(--muted); }
+    .mic-row-arrow { color: var(--muted); font-size: 18px; }
+
+    /* DIVIDER */
+    .or-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 4px 0 16px; color: var(--muted); font-size: 12px;
+    }
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
     }
 
+    /* VOICE TOGGLE */
     .voice-row {
       display: flex; align-items: center; justify-content: space-between;
       background: var(--surface); border: 1px solid var(--border);
@@ -107,20 +145,14 @@
     .voice-label { display: flex; align-items: center; gap: 10px; font-size: 14px; }
     .toggle { position: relative; width: 46px; height: 26px; }
     .toggle input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute; inset: 0; background: var(--border);
-      border-radius: 26px; cursor: pointer; transition: background 0.3s;
-    }
-    .slider::before {
-      content: ''; position: absolute;
-      width: 18px; height: 18px; left: 4px; bottom: 4px;
-      background: white; border-radius: 50%; transition: transform 0.3s;
-    }
+    .slider { position: absolute; inset: 0; background: var(--border); border-radius: 26px; cursor: pointer; transition: background 0.3s; }
+    .slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 4px; bottom: 4px; background: white; border-radius: 50%; transition: transform 0.3s; }
     .toggle input:checked + .slider { background: var(--accent2); }
     .toggle input:checked + .slider::before { transform: translateX(20px); }
 
+    /* FIELDS */
     .field { margin-bottom: 14px; }
-    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.5px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
     .field select {
       width: 100%; background: var(--surface); border: 1px solid var(--border);
       border-radius: 10px; color: var(--text); font-family: 'Sora', sans-serif;
@@ -130,7 +162,10 @@
       cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
     }
     .field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,255,0.12); }
+    /* highlight when set by voice */
+    .field select.voice-set { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(0,255,157,0.12); }
 
+    /* BUTTONS */
     .btn {
       display: flex; align-items: center; justify-content: center; gap: 10px;
       width: 100%; padding: 16px; border: none; border-radius: 12px;
@@ -140,17 +175,11 @@
     }
     .btn:active { transform: scale(0.97); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent), #0099cc);
-      color: #0b0f1a; box-shadow: 0 4px 24px rgba(0,212,255,0.25);
-    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #0099cc); color: #0b0f1a; box-shadow: 0 4px 24px rgba(0,212,255,0.25); }
     .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 32px rgba(0,212,255,0.4); }
-    .btn-stop {
-      background: transparent; border: 1px solid var(--danger);
-      color: var(--danger); font-size: 15px; padding: 12px;
-      margin-top: 10px; display: none;
-    }
+    .btn-stop { background: transparent; border: 1px solid var(--danger); color: var(--danger); font-size: 15px; padding: 12px; margin-top: 10px; display: none; }
 
+    /* NAV CARD */
     .step-badge {
       display: inline-block;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
@@ -158,30 +187,18 @@
       font-size: 11px; font-weight: 700; padding: 4px 12px;
       border-radius: 20px; letter-spacing: 1px; margin-bottom: 14px;
     }
-
-    #instruction-text {
-      font-size: 19px; font-weight: 600; line-height: 1.55;
-      color: var(--text); min-height: 58px;
-    }
-
-    .dist-row {
-      display: flex; align-items: center; gap: 14px;
-      margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
-    }
+    #instruction-text { font-size: 19px; font-weight: 600; line-height: 1.55; color: var(--text); min-height: 58px; }
+    .dist-row { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
     .dist-icon { font-size: 26px; }
     .dist-info { flex: 1; }
     .dist-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
     #distance-text { font-family: 'Space Mono', monospace; font-size: 28px; color: var(--accent); font-weight: 700; }
-
     .progress-wrap { margin-top: 18px; }
     .progress-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
     .progress-track { background: var(--surface); border-radius: 4px; height: 6px; overflow: hidden; }
-    #progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent2));
-      border-radius: 4px; width: 0%; transition: width 0.5s ease;
-    }
+    #progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; width: 0%; transition: width 0.5s ease; }
 
+    /* ARRIVED */
     #arrived-box { display: none; text-align: center; padding: 10px 0; }
     .arrived-icon { font-size: 54px; margin-bottom: 12px; animation: bounce 0.6s ease; }
     @keyframes bounce { 0%{transform:scale(0.5);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
@@ -199,6 +216,7 @@
     <p class="subtitle">Accessible Navigation · SJCE</p>
   </header>
 
+  <!-- GPS BAR -->
   <div id="gps-bar" role="status" aria-live="polite">
     <div class="gps-dot waiting" id="gps-dot"></div>
     <span id="gps-text">Requesting GPS permission...</span>
@@ -208,19 +226,42 @@
   <div class="card" id="setup-card">
     <div class="card-label">⚙ Navigation Setup</div>
 
+    <!-- Voice toggle -->
     <div class="voice-row">
       <div class="voice-label"><span>🔊</span><span>Voice Guidance</span></div>
       <label class="toggle">
-        <input type="checkbox" id="voice-toggle" checked />
+        <input type="checkbox" id="voice-toggle" checked/>
         <span class="slider"></span>
       </label>
     </div>
 
-    <div class="field">
-      <label for="start-select">📍 Your Current Location</label>
-      <select id="start-select"><option value="">— Select starting point —</option></select>
+    <!-- Voice assistant panel (shown when mic is tapped) -->
+    <div id="voice-flow">
+      <div class="va-title">🎙 Voice Assistant</div>
+      <div id="voice-prompt">Press the microphone and speak your location.</div>
+      <button id="voice-input-btn" onclick="runVoiceSetup()" aria-label="Start voice input">
+        <span id="mic-icon">🎙️</span>
+      </button>
+      <div class="va-hint">Tap mic · Speak clearly · Wait for response</div>
     </div>
 
+    <!-- Tap to use voice -->
+    <div class="mic-row" onclick="toggleVoiceFlow()" role="button" aria-label="Use voice to set locations">
+      <div class="mic-row-icon">🎙️</div>
+      <div class="mic-row-text">
+        <strong>Use Voice Input</strong>
+        <span>Say your location and destination</span>
+      </div>
+      <div class="mic-row-arrow">›</div>
+    </div>
+
+    <div class="or-divider">or select manually</div>
+
+    <!-- Dropdowns -->
+    <div class="field">
+      <label for="start-select">📍 Current Location</label>
+      <select id="start-select"><option value="">— Select starting point —</option></select>
+    </div>
     <div class="field">
       <label for="dest-select">🏁 Destination</label>
       <select id="dest-select"><option value="">— Select destination —</option></select>
@@ -238,7 +279,6 @@
     <div id="instruction-box">
       <div class="step-badge" id="step-badge">STEP 1</div>
       <div id="instruction-text" aria-live="assertive">Acquiring GPS signal...</div>
-
       <div class="dist-row">
         <div class="dist-icon">📏</div>
         <div class="dist-info">
@@ -246,7 +286,6 @@
           <div id="distance-text">— m</div>
         </div>
       </div>
-
       <div class="progress-wrap">
         <div class="progress-meta">
           <span>Route progress</span>
@@ -266,5 +305,15 @@
   </div>
 
   <script src="script.js"></script>
+  <script>
+    function toggleVoiceFlow() {
+      const vf = document.getElementById("voice-flow");
+      const showing = vf.style.display === "block";
+      vf.style.display = showing ? "none" : "block";
+      if (!showing) {
+        document.getElementById("voice-prompt").innerText = "Press the microphone and speak your location.";
+      }
+    }
+  </script>
 </body>
 </html>
