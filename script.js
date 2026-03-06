@@ -1,15 +1,20 @@
 /* ============================================================
    Campus Navigator — script.js
-   Fixes: sanitized IDs, auto-start after voice & dropdowns
+   Multi-user | GPS current location | Dynamic directions
    ============================================================ */
 
-let session_id   = null;
-let watchId      = null;
-let totalSteps   = 0;
-let currentStep  = 0;
-let destName     = "";
-let allLocations = [];
-let voiceSetupDone = false;   // tracks if BOTH locations were set by voice
+let session_id      = null;
+let watchId         = null;
+let totalSteps      = 0;
+let currentStep     = 0;
+let destName        = "";
+let allLocations    = [];
+let lastInstruction = "";
+
+// Heading tracking (for dynamic directions)
+let lastLat     = null;
+let lastLng     = null;
+let userHeading = -1;   // -1 = unknown
 
 /* ------------------------------------------------------------------ */
 /*  SPEAK                                                              */
@@ -20,7 +25,7 @@ function speak(text, onEnd) {
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang  = "en-IN";
-  utt.rate  = 0.92;
+  utt.rate  = 0.93;
   utt.pitch = 1.0;
   if (onEnd) utt.onend = onEnd;
   window.speechSynthesis.speak(utt);
@@ -36,13 +41,12 @@ function listen() {
     if (!SR) { reject("not_supported"); return; }
     setVoiceStatus("listening");
     const rec = new SR();
-    rec.lang            = "en-IN";
+    rec.lang = "en-IN";
     rec.interimResults  = false;
     rec.maxAlternatives = 3;
     rec.onresult = (e) => {
-      const results = Array.from(e.results[0]).map(r => r.transcript.trim().toLowerCase());
       setVoiceStatus("idle");
-      resolve(results);
+      resolve(Array.from(e.results[0]).map(r => r.transcript.trim().toLowerCase()));
     };
     rec.onerror = (e) => { setVoiceStatus("idle"); reject(e.error); };
     rec.onend   = ()  => { setVoiceStatus("idle"); };
@@ -51,7 +55,7 @@ function listen() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  MATCH SPOKEN TEXT TO LOCATION                                      */
+/*  MATCH SPOKEN TEXT TO LOCATION                                     */
 /* ------------------------------------------------------------------ */
 
 function matchLocation(transcripts) {
@@ -61,8 +65,8 @@ function matchLocation(transcripts) {
     for (const loc of allLocations) {
       const locName    = loc.name.toLowerCase().replace(/[^a-z0-9 ]/g, "");
       const locWords   = locName.split(" ");
-      const spokenWords = cleaned.split(" ");
-      const overlap    = locWords.filter(w => spokenWords.some(s => s.includes(w) || w.includes(s))).length;
+      const spoken     = cleaned.split(" ");
+      const overlap    = locWords.filter(w => spoken.some(s => s.includes(w) || w.includes(s))).length;
       const score      = overlap / locWords.length;
       const contains   = cleaned.includes(locName) || locName.includes(cleaned);
       const finalScore = contains ? 1 : score;
@@ -74,22 +78,95 @@ function matchLocation(transcripts) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  HEADING CALCULATION (from consecutive GPS positions)              */
+/* ------------------------------------------------------------------ */
+
+function computeHeading(lat1, lng1, lat2, lng2) {
+  const toRad = d => d * Math.PI / 180;
+  const dLng  = toRad(lng2 - lng1);
+  const lat1r = toRad(lat1);
+  const lat2r = toRad(lat2);
+  const x = Math.sin(dLng) * Math.cos(lat2r);
+  const y = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLng);
+  return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+}
+
+/* ------------------------------------------------------------------ */
+/*  USE CURRENT GPS LOCATION                                          */
+/* ------------------------------------------------------------------ */
+
+function useCurrentLocation() {
+  const btn = document.getElementById("gps-locate-btn");
+  btn.disabled  = true;
+  btn.innerText = "📡 Locating...";
+  setGpsStatus("waiting", "Getting your current position...");
+  speak("Getting your current location.");
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+
+      try {
+        const res  = await fetch("/nearest_location", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ lat, lng })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          setGpsStatus("error", data.error);
+          speak(data.error);
+          btn.disabled  = false;
+          btn.innerText = "📍 Use My Current Location";
+          return;
+        }
+
+        // Set start dropdown
+        const startSel = document.getElementById("start-select");
+        startSel.value = data.location_id;
+        startSel.classList.add("voice-set");
+
+        const msg = "Your current location is " + data.name +
+                    ", which is " + Math.round(data.distance_m) + " meters away.";
+        setVoicePrompt("📍 " + data.name + " (" + Math.round(data.distance_m) + "m away)");
+        setGpsStatus("active", "Location found: " + data.name);
+        speak(msg);
+        checkStartReady();
+
+        btn.disabled  = false;
+        btn.innerText = "✅ " + data.name;
+
+      } catch (e) {
+        setGpsStatus("error", "Could not reach server.");
+        btn.disabled  = false;
+        btn.innerText = "📍 Use My Current Location";
+      }
+    },
+    (err) => {
+      setGpsStatus("error", "GPS permission denied. Please allow location access.");
+      speak("Could not get your location. Please allow GPS permission.");
+      btn.disabled  = false;
+      btn.innerText = "📍 Use My Current Location";
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  VOICE FLOW                                                         */
 /* ------------------------------------------------------------------ */
 
 async function runVoiceSetup() {
   setVoiceFlowVisible(true);
-  voiceSetupDone = false;
-
   const startMatched = await askVoiceLocation("start");
   const destMatched  = await askVoiceLocation("dest");
 
-  // Both matched via voice → auto-start immediately
   if (startMatched && destMatched) {
-    voiceSetupDone = true;
     setVoicePrompt("✅ Both locations set. Starting navigation...");
     speak("Starting navigation now.", async () => {
-      await delay(500);
+      await delay(400);
       startNavigation();
     });
   }
@@ -98,7 +175,7 @@ async function runVoiceSetup() {
 async function askVoiceLocation(which) {
   const isStart  = which === "start";
   const question = isStart
-    ? "Where are you currently? Please say your current location."
+    ? "Where are you currently? Say your current location, or say use my location to use GPS."
     : "Where do you want to go? Please say your destination.";
   const label = isStart ? "current location" : "destination";
 
@@ -109,67 +186,53 @@ async function askVoiceLocation(which) {
     attempts++;
     setVoicePrompt(question);
     speak(question);
-    await delay(3200);   // wait for speech to finish
+    await delay(3400);
 
     try {
       const transcripts = await listen();
-      setVoicePrompt('I heard: "' + transcripts[0] + '" — matching...');
+      setVoicePrompt('Heard: "' + transcripts[0] + '" — matching...');
+
+      // Handle "use my location" voice command for start
+      if (isStart && transcripts.some(t => t.includes("my location") || t.includes("current location") || t.includes("here"))) {
+        setVoicePrompt("Using GPS to find your location...");
+        speak("Getting your GPS location.");
+        useCurrentLocation();
+        return { fromGPS: true };
+      }
+
       matched = matchLocation(transcripts);
 
       if (matched) {
-        // Set the dropdown value using the sanitized ID
         const selId = isStart ? "start-select" : "dest-select";
-        const sel   = document.getElementById(selId);
-        sel.value   = matched.id;
+        document.getElementById(selId).value = matched.id;
+        document.getElementById(selId).classList.add("voice-set");
 
-        // Highlight the dropdown
-        sel.classList.add("voice-set");
-
-        const confirm = "Got it. " + (isStart ? "Your current location is " : "Your destination is ") + matched.name + ".";
         setVoicePrompt("✅ " + (isStart ? "Start" : "Destination") + ": " + matched.name);
-        speak(confirm);
+        speak("Got it. " + (isStart ? "Current location is " : "Destination is ") + matched.name + ".");
         checkStartReady();
         await delay(2800);
 
       } else {
         const retry = attempts < 3
-          ? "Sorry, I could not find that location. Please try again and say the " + label + " clearly."
-          : "Sorry, I could not understand. Please select the " + label + " from the dropdown below.";
-        setVoicePrompt("❓ Couldn't match. " + (attempts < 3 ? "Retrying..." : "Use dropdown."));
+          ? "Sorry, I could not find that. Please try again."
+          : "Please select from the dropdown below.";
+        setVoicePrompt("❓ Could not match. " + (attempts < 3 ? "Try again..." : "Use dropdown."));
         speak(retry);
         await delay(3000);
       }
     } catch (err) {
       if (err === "not_supported") {
-        setVoicePrompt("Voice input not supported. Please use the dropdowns.");
-        speak("Voice input is not supported on this browser. Please use the dropdown menus.");
+        setVoicePrompt("Voice not supported. Please use dropdowns.");
+        speak("Voice input is not supported. Please use the dropdown menus.");
         return null;
       }
-      setVoicePrompt("Microphone error. Please use the dropdown.");
+      setVoicePrompt("Mic error. Please use the dropdown.");
       return null;
     }
   }
 
   checkStartReady();
   return matched;
-}
-
-/* ------------------------------------------------------------------ */
-/*  AUTO-START LOGIC                                                   */
-/* ------------------------------------------------------------------ */
-
-function maybeAutoStart(fromVoice) {
-  const s = document.getElementById("start-select").value;
-  const d = document.getElementById("dest-select").value;
-  if (!s || !d || s === d) return;
-
-  if (fromVoice) {
-    // Voice already handles its own auto-start in runVoiceSetup
-    return;
-  }
-
-  // Both dropdowns manually selected → auto-start
-  startNavigation();
 }
 
 /* ------------------------------------------------------------------ */
@@ -192,7 +255,8 @@ function setVoiceStatus(state) {
 }
 
 function setVoicePrompt(msg) {
-  document.getElementById("voice-prompt").innerText = msg;
+  const el = document.getElementById("voice-prompt");
+  if (el) el.innerText = msg;
 }
 
 function setVoiceFlowVisible(show) {
@@ -207,20 +271,24 @@ function setGpsStatus(state, msg) {
 function checkStartReady() {
   const s = document.getElementById("start-select").value;
   const d = document.getElementById("dest-select").value;
-  const ok = s && d && s !== d;
-  document.getElementById("start-btn").disabled = !ok;
+  document.getElementById("start-btn").disabled = !(s && d && s !== d);
+}
+
+function toggleVoiceFlow() {
+  const vf      = document.getElementById("voice-flow");
+  const showing = vf.style.display === "block";
+  vf.style.display = showing ? "none" : "block";
+  if (!showing) setVoicePrompt("Press the microphone and speak your location.");
 }
 
 /* ------------------------------------------------------------------ */
-/*  LOAD LOCATIONS — sanitize IDs to prevent invalid location errors  */
+/*  LOAD LOCATIONS                                                     */
 /* ------------------------------------------------------------------ */
 
 async function loadLocations() {
   try {
     const res = await fetch("/locations");
     const raw = await res.json();
-
-    // Strip any stray whitespace or \r characters from IDs and names
     allLocations = raw.map(loc => ({
       id:   loc.id.trim().replace(/\r/g, ""),
       name: loc.name.trim().replace(/\r/g, "")
@@ -234,16 +302,13 @@ async function loadLocations() {
       destSel.appendChild(new Option(loc.name, loc.id));
     });
 
-    // Dropdown manual change
+    // Auto-start when both dropdowns are manually set
     [startSel, destSel].forEach(sel => {
       sel.addEventListener("change", () => {
         checkStartReady();
-        // Auto-start only when BOTH are chosen manually
         const s = startSel.value;
         const d = destSel.value;
-        if (s && d && s !== d) {
-          startNavigation();
-        }
+        if (s && d && s !== d) startNavigation();
       });
     });
 
@@ -261,10 +326,10 @@ window.onload = async function () {
     setGpsStatus("error", "Geolocation not supported on this device.");
     return;
   }
-  setGpsStatus("waiting", "Waiting for GPS...");
+  setGpsStatus("waiting", "Ready.");
   await loadLocations();
   await delay(600);
-  speak("Welcome to Campus Navigator. Press the microphone button to use voice, or select your locations from the dropdowns.");
+  speak("Welcome to Campus Navigator. You can use the microphone for voice input, tap Use My Location for GPS, or select from the dropdowns.");
 };
 
 /* ------------------------------------------------------------------ */
@@ -297,8 +362,11 @@ async function startNavigation() {
     }
 
     session_id  = data.session_id;
-    totalSteps  = data.route.length - 1;
+    totalSteps  = data.total_steps;
     currentStep = 0;
+    lastLat     = null;
+    lastLng     = null;
+    userHeading = -1;
 
     document.getElementById("setup-card").style.display      = "none";
     document.getElementById("nav-card").style.display        = "block";
@@ -326,18 +394,31 @@ async function startNavigation() {
 /*  SEND GPS TO SERVER                                                 */
 /* ------------------------------------------------------------------ */
 
-let lastInstruction = "";
-
 async function sendLocation(position) {
   const lat = position.coords.latitude;
   const lng = position.coords.longitude;
-  setGpsStatus("active", "GPS active · Tracking...");
+
+  // Update heading from movement
+  if (lastLat !== null && lastLng !== null) {
+    const dist = Math.sqrt(
+      Math.pow((lat - lastLat) * 111000, 2) +
+      Math.pow((lng - lastLng) * 111000 * Math.cos(lat * Math.PI / 180), 2)
+    );
+    // Only update heading if moved more than 3 meters (avoid GPS noise)
+    if (dist > 3) {
+      userHeading = computeHeading(lastLat, lastLng, lat, lng);
+    }
+  }
+  lastLat = lat;
+  lastLng = lng;
+
+  setGpsStatus("active", "GPS active · Tracking" + (userHeading >= 0 ? " · Heading " + Math.round(userHeading) + "°" : ""));
 
   try {
     const res  = await fetch("/update_location", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ session_id, lat, lng })
+      body:    JSON.stringify({ session_id, lat, lng, heading: userHeading })
     });
     const data = await res.json();
 
@@ -348,13 +429,15 @@ async function sendLocation(position) {
     const distance    = Math.round(data.distance);
     const step        = data.step ?? currentStep;
 
+    // Speak when instruction changes
     if (instruction !== lastInstruction) {
       speak(instruction);
       lastInstruction = instruction;
     }
 
+    // Approaching warning
     if (distance <= 15 && distance > 5) {
-      const msg = "Approaching in " + distance + " meters.";
+      const msg = "Approaching " + data.next_location + " in " + distance + " meters.";
       if (lastInstruction !== msg) { speak(msg); lastInstruction = msg; }
     }
 
@@ -400,9 +483,7 @@ function showArrived() {
 
 function stopNavigation() {
   if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-  session_id      = null;
-  lastInstruction = "";
-  voiceSetupDone  = false;
+  session_id = null; lastInstruction = ""; userHeading = -1; lastLat = null; lastLng = null;
   document.getElementById("nav-card").style.display        = "none";
   document.getElementById("setup-card").style.display      = "block";
   document.getElementById("arrived-box").style.display     = "none";
@@ -412,6 +493,8 @@ function stopNavigation() {
   document.getElementById("dest-select").value             = "";
   document.getElementById("start-select").classList.remove("voice-set");
   document.getElementById("dest-select").classList.remove("voice-set");
+  document.getElementById("gps-locate-btn").innerText      = "📍 Use My Current Location";
+  document.getElementById("gps-locate-btn").disabled       = false;
   setVoiceFlowVisible(false);
   setGpsStatus("waiting", "Navigation stopped.");
   speak("Navigation stopped.");
