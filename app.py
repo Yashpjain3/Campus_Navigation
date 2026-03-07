@@ -237,11 +237,23 @@ def update_location():
     distance        = calculate_distance(lat, lng, target_lat, target_lng)
     target_bearing  = calculate_bearing(lat, lng, target_lat, target_lng)
 
-    # Build dynamic instruction if heading is known, else use static
+    # Use static instruction from graph (direction only, no distance)
+    # Distance is shown separately on screen - avoids voice saying "91m...90m...89m"
+    static_instruction = G[current][next_node]["instruction"]
+
+    # Build dynamic turn direction only (no distance embedded in text)
     if user_heading >= 0:
-        instruction = build_dynamic_instruction(user_heading, target_bearing, next_name, distance)
+        direction = get_relative_direction(user_heading, target_bearing)
+        if direction == "straight":
+            instruction = f"Continue straight towards {next_name}."
+        elif direction in ("slight right", "right", "sharp right"):
+            instruction = f"Turn {direction} towards {next_name}."
+        elif direction in ("slight left", "left", "sharp left"):
+            instruction = f"Turn {direction} towards {next_name}."
+        else:
+            instruction = static_instruction
     else:
-        instruction = G[current][next_node]["instruction"]
+        instruction = static_instruction
 
     # Advance step when close enough
     # 15m threshold — GPS on phones has ±5-10m natural drift, 5m was too aggressive
