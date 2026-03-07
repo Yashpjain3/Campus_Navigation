@@ -181,12 +181,15 @@ def start_navigation():
     start = data["start"].strip()
     dest  = data["destination"].strip()
 
+    # Debug: log what we received
+    print(f"[NAV] start={repr(start)} dest={repr(dest)} in_graph={start in G.nodes()} {dest in G.nodes()}")
+
     try:
         path = list(nx.shortest_path(G, start, dest))
     except nx.NetworkXNoPath:
-        return jsonify({"error": "No path found between these locations."})
+        return jsonify({"error": f"No path: {start} -> {dest}. Graph has {len(G.nodes())} nodes."})
     except nx.NodeNotFound as e:
-        return jsonify({"error": f"Location not found in map: {str(e)}"})
+        return jsonify({"error": f"Node missing: {str(e)}. Received start={repr(start)} dest={repr(dest)}"})
 
     session_id = str(uuid.uuid4())
     with session_lock:
@@ -261,6 +264,20 @@ def update_location():
         "arrived":         arrived,
         "target_bearing":  round(target_bearing, 1),
         "next_location":   next_name
+    })
+
+# -------------------------
+# Debug Endpoint (check graph health)
+# -------------------------
+
+@app.route("/debug", methods=["GET"])
+def debug():
+    nodes = sorted(G.nodes())
+    return jsonify({
+        "node_count":   len(nodes),
+        "edge_count":   len(G.edges()),
+        "nodes":        nodes,
+        "sample_edge":  list(G.edges())[:3]
     })
 
 # -------------------------
