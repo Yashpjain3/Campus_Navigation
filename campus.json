@@ -22,7 +22,7 @@
       "name": "Polymer Science Department",
       "description": "You are at the Polymer Science Department.",
       "lat": 12.315276,
-      "lng": 76.613540
+      "lng": 76.61354
     },
     "loc_005": {
       "name": "Golden Jubilee Block",
@@ -40,11 +40,11 @@
       "name": "PDA Block",
       "description": "You are at the Polytechnic for Differently Abled.",
       "lat": 12.317498,
-      "lng": 76.613620
+      "lng": 76.61362
     },
     "loc_008": {
       "name": "Rubber Institute",
-      "description": "You are at the Indian Rubber Institute and Alok’s Kitchen.",
+      "description": "You are at the Indian Rubber Institute and Alok\u2019s Kitchen.",
       "lat": 12.315459,
       "lng": 76.612111
     },
@@ -69,7 +69,7 @@
     "loc_012": {
       "name": "Ganesha Temple",
       "description": "You are at the Ganesha Temple.",
-      "lat": 12.312990,
+      "lat": 12.31299,
       "lng": 76.612878
     },
     "loc_013": {
@@ -106,7 +106,7 @@
       "name": "SJCE Women Hostel",
       "description": "You are at the Women's Hostel.",
       "lat": 12.318334,
-      "lng": 76.612050
+      "lng": 76.61205
     },
     "loc_019": {
       "name": "Exit Gate",
@@ -159,7 +159,7 @@
     "loc_027": {
       "name": "Chemistry Circle",
       "description": "You are at the Chemistry Circle intersection.",
-      "lat": 12.314390,
+      "lat": 12.31439,
       "lng": 76.613645
     },
     "loc_028": {
@@ -189,7 +189,8 @@
       "loc_013": "Walk 30 meters back to reach the Pot Circle.",
       "loc_012": "Walk 134 meters straight to reach the Ganesha Temple.",
       "loc_001": "Walk 27 meters right to reach the Admin Block.",
-      "loc_015": "Walk 71 meters straight to reach the Boys Hostel and PT department."
+      "loc_015": "Walk 71 meters straight to reach the Boys Hostel and PT department.",
+      "loc_014": "Walk 93 meters straight to reach the Department of Physical Training."
     },
     "loc_025": {
       "loc_013": "Walk 46 meters back to reach the Pot Circle.",
@@ -210,10 +211,6 @@
       "loc_024": "Walk 27 meters left to reach the Dean Office Circle.",
       "loc_002": "Walk 114 meters right to reach the Chemistry Department."
     },
-     "loc_004": {
-      "loc_021": "Walk 30 meters towards your left and take left and walk straight for 21 meters to reach the CS Lawn Circle.",
-      "loc_003": "Turn to you right and Walk straight for 60 meters and take the next right and walk straight for 10 meters to reach the Environment department Department."
-    },
     "loc_002": {
       "loc_001": "Walk 114 meters back to reach the Admin Block.",
       "loc_003": "Walk 69 meters straight and a slight left to reach the Environment Department.",
@@ -229,7 +226,8 @@
     "loc_003": {
       "loc_002": "Walk 29 meters back and slight right to reach the Chemistry Department.",
       "loc_029": "Walk 80 meters straight to reach the Biotechnology Department.",
-      "loc_028": "Walk 50 meters back and take the next right and walk 50 meters to reach the Civil Engineering Department."
+      "loc_028": "Walk 50 meters back and take the next right and walk 50 meters to reach the Civil Engineering Department.",
+      "loc_004": "Walk 10 meters back and take left and walk 60 meters to reach the Polymer Science Department."
     },
     "loc_028": {
       "loc_003": "Walk 50 meters back and take left and walk for 50 meters to reach the Environment Department.",
@@ -239,14 +237,12 @@
       "loc_028": "Walk 14 meters back and take slight right and walk straight for 10 meters to reach the Polymer Science Department.",
       "loc_023": "Walk 14 meters back take a slight left and walk straight for 78 metrers to reach the Football Ground.",
       "loc_005": "Walk 81 meters straight after taking a slight right to reach the Golden Jubilee Block.",
-      "loc_008": "Walk 158 meters towards the left to reach the Rubber Institute."
+      "loc_008": "Walk 158 meters towards the left to reach the Rubber Institute.",
+      "loc_004": "Walk 21 meters straight and take right and walk 30 meters to reach the Polymer Science Department."
     },
     "loc_012": {
       "loc_024": "Walk 134 meters back towards the entry gate to reach the Dean Office Circle.",
       "loc_011": "Walk 30 meters towards your right to reach the Electrical Department, the Destination will be to your left."
-    },
-    "loc_014": {
-      "loc_024": "Walk 93 meters back towards the entry gate to reach the Dean Office Circle."
     },
     "loc_011": {
       "loc_012": "Walk 30 meters towards your left to reach the Ganesha Temple, the Destination will be to your right.",
@@ -268,7 +264,7 @@
       "loc_021": "Walk 81 meters back to reach the CS Lawn Circle.",
       "loc_006": "Walk 132 meters straight to reach the CMS Block."
     },
-    "loc_006": { 
+    "loc_006": {
       "loc_005": "Walk 132 meters back to reach the Golden Jubilee Block.",
       "loc_007": "Walk 24 meters straight and slight left to reach the PDA Block."
     },
@@ -293,7 +289,13 @@
     },
     "loc_015": {
       "loc_024": "Walk 71 meters back to reach the Dean Circle."
+    },
+    "loc_004": {
+      "loc_021": "Walk 30 meters towards your left and take left and walk straight for 21 meters to reach the CS Lawn Circle.",
+      "loc_003": "Turn to your right and walk straight for 60 meters and take the next right and walk straight for 10 meters to reach the Environment Department."
+    },
+    "loc_014": {
+      "loc_024": "Walk 93 meters back towards the entry gate to reach the Dean Office Circle."
     }
   }
-
 }
