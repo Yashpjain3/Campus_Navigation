@@ -9,7 +9,10 @@ let totalSteps      = 0;
 let currentStep     = 0;
 let destName        = "";
 let allLocations    = [];
-let lastInstruction = "";
+let lastInstruction  = "";
+let lastSpokenDist   = -1;    // last distance we announced
+let lastSpokenStep   = -1;    // last step we announced
+let spokenMilestones = new Set(); // distance milestones already announced
 
 // Heading tracking (for dynamic directions)
 let lastLat     = null;
@@ -476,18 +479,30 @@ async function sendLocation(position) {
     const distance    = Math.round(data.distance);
     const step        = data.step ?? currentStep;
 
-    // Speak when instruction changes
-    if (instruction !== lastInstruction) {
+    // ── Speak step instruction ONLY when step changes ─────────────────
+    if (step !== lastSpokenStep) {
       speak(instruction);
-      lastInstruction = instruction;
+      lastInstruction  = instruction;
+      lastSpokenStep   = step;
+      lastSpokenDist   = distance;
+      spokenMilestones = new Set();   // reset milestones for new step
     }
 
-    // Approaching warning
-    if (distance <= 15 && distance > 5) {
-      const msg = "Approaching " + data.next_location + " in " + distance + " meters.";
-      if (lastInstruction !== msg) { speak(msg); lastInstruction = msg; }
+    // ── Speak distance milestones: 80m, 50m, 30m, 15m only once each ─
+    const milestones = [80, 50, 30, 15];
+    for (const m of milestones) {
+      if (distance <= m && !spokenMilestones.has(m)) {
+        spokenMilestones.add(m);
+        // Only speak if distance drop is real (>3m from last spoken)
+        if (Math.abs(distance - lastSpokenDist) > 3) {
+          speak("In " + distance + " meters, " + instruction.toLowerCase());
+          lastSpokenDist = distance;
+        }
+        break;
+      }
     }
 
+    // ── Update display (always, no noise) ────────────────────────────
     document.getElementById("instruction-text").innerText = instruction;
     document.getElementById("distance-text").innerText    = distance + " m";
     document.getElementById("step-badge").innerText       = "STEP " + (step + 1);
